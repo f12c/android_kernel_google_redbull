@@ -512,6 +512,7 @@ static inline struct usb_request *hidg_alloc_ep_req(struct usb_ep *ep,
 	return alloc_ep_req(ep, length);
 }
 
+extern void notify_hid_iap_start(void);
 static void hidg_set_report_complete(struct usb_ep *ep, struct usb_request *req)
 {
 	struct f_hidg *hidg = (struct f_hidg *) req->context;
@@ -543,7 +544,11 @@ static void hidg_set_report_complete(struct usb_ep *ep, struct usb_request *req)
 		}
 
 		req_list->req = req;
-    	buf_data = (u8*)req->buf;
+
+		spin_lock_irqsave(&hidg->read_spinlock, flags);
+		list_add_tail(&req_list->list, &hidg->completed_out_req);
+		spin_unlock_irqrestore(&hidg->read_spinlock, flags);
+        buf_data = (u8*)req->buf;
     	if (
     		req->actual >= 8
     		&& buf_data[2] == 0xff
@@ -555,11 +560,6 @@ static void hidg_set_report_complete(struct usb_ep *ep, struct usb_request *req)
     	) {
     		notify_hid_iap_start();
     	}
-
-		spin_lock_irqsave(&hidg->read_spinlock, flags);
-		list_add_tail(&req_list->list, &hidg->completed_out_req);
-		spin_unlock_irqrestore(&hidg->read_spinlock, flags);
-
 		wake_up(&hidg->read_queue);
 		break;
 	default:
